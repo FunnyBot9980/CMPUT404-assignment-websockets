@@ -26,6 +26,28 @@ app = Flask(__name__)
 sockets = Sockets(app)
 app.debug = True
 
+#https://github.com/abramhindle/WebSocketsExamples/blob/master/broadcaster.py
+clients = []
+
+def send_all(msg):
+    for client in clients:
+        client.put(msg)
+
+def send_all_json(obj):
+    send_all(json.dumps(obj))
+
+class Client:
+    def __init__(self):
+        self.queue = queue.Queue()
+
+    def put(self, v):
+        self.queue.put_nowait(v)
+
+    def get(self):
+        return self.queue.get()
+#
+
+
 class World:
     def __init__(self):
         self.clear()
@@ -67,18 +89,6 @@ def set_listener( entity, data ):
 myWorld.add_set_listener( set_listener )
 
 
-class Client:
-    def __init__(self, number):
-        self.queue = queue.Queue()
-        self.number = number
-
-    def put(self, v):
-        self.queue.put_nowait(v)
-
-    def get(self):
-        return self.queue.get()
-
-        
 @app.route('/')
 def hello():
     '''Return something coherent here.. perhaps redirect to /static/index.html '''
@@ -88,14 +98,15 @@ def hello():
 
 def read_ws(ws, client):
     '''A greenlet function that reads from the websocket and updates the world'''
+    #https://github.com/abramhindle/WebSocketsExamples/blob/master/broadcaster.py
     try:
         while True:
             msg = ws.receive()
             print("WS RECV: %s" % msg)
             if (msg is not None):
                 packet = json.loads(msg)
-                for key, value in packet.items():
-                    myWorld.set(key, value)
+                for x in packet:
+                    myWorld.set(x, packet[x])
                 send_all_json(packet)
             else:
                 break
@@ -108,7 +119,7 @@ def read_ws(ws, client):
 def subscribe_socket(ws):
     '''Fufill the websocket URL of /subscribe, every update notify the
        websocket and read updates from the websocket '''
-
+    #https://github.com/abramhindle/WebSocketsExamples/blob/master/broadcaster.py
     client = Client()
     clients.append(client)
     g = gevent.spawn(read_ws, ws, client)    
